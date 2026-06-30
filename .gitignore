@@ -7,3 +7,5 @@ __pycache__/
 venv/
 ENV/
 env/
+dist/
+upx.exe
