@@ -34,6 +34,7 @@ class QRReceiverApp:
         self.decoded_blocks = {}      
         self.processed_seeds = set()
         self.start_time = None
+        self.last_general_qr_text = None
         
         self.setup_ui()
 
@@ -74,6 +75,13 @@ class QRReceiverApp:
         self.lbl_time = ttk.Label(status_frame, text="传输耗时: 0.0 秒")
         self.lbl_time.pack(anchor=tk.W, pady=2)
 
+        # 通用二维码显示与复制
+        general_frame = ttk.Frame(status_frame)
+        general_frame.pack(fill=tk.X, pady=2)
+        self.lbl_general_qr = ttk.Label(general_frame, text="通用二维码: --", wraplength=200)
+        self.lbl_general_qr.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.btn_copy_general = ttk.Button(general_frame, text="复制", width=6, command=self.copy_general_qr)
+        self.btn_copy_general.pack(side=tk.RIGHT, padx=5)
         
         self.progress_bar = ttk.Progressbar(status_frame, orient=tk.HORIZONTAL, mode='determinate')
         self.progress_bar.pack(fill=tk.X, pady=5)
@@ -100,12 +108,14 @@ class QRReceiverApp:
         self.decoded_blocks = {}
         self.processed_seeds = set()
         self.start_time = None
+        self.last_general_qr_text = None
         
         self.btn_toggle.config(text="▶ 开始")
         self.lbl_target.config(text="捕获区域: 等待校准...", foreground="gray")
         self.lbl_session.config(text="会话ID: --")
         self.lbl_progress.config(text="解码进度: 0 / 0 (已捕获 0 帧)")
         self.lbl_time.config(text="传输耗时: 0.0 秒")
+        self.lbl_general_qr.config(text="通用二维码: --")
         self.progress_bar.config(value=0, maximum=100)
         self.video_label.config(image='')
         self.video_label.image = None
@@ -124,10 +134,12 @@ class QRReceiverApp:
             self.decoded_blocks = {}
             self.processed_seeds = set()
             self.start_time = None
+            self.last_general_qr_text = None
             
             self.lbl_session.config(text="会话ID: --")
             self.lbl_progress.config(text="解码进度: 0 / 0 (已捕获 0 帧)")
             self.lbl_time.config(text="传输耗时: 0.0 秒")
+            self.lbl_general_qr.config(text="通用二维码: --")
             self.progress_bar.config(value=0, maximum=100)
             self.video_label.config(image='')
             self.video_label.image = None
@@ -195,10 +207,23 @@ class QRReceiverApp:
                     if obj.format != zxingcpp.BarcodeFormat.QRCode:
                         continue
                         
-                    # 🌟 提取原汁原味的二进制流
+                    # 判断是自定义协议特定二维码还是通用二维码
                     raw_bytes = obj.bytes
-                    if len(raw_bytes) > 10:
+                    is_custom = False
+                    if len(raw_bytes) >= 10:
+                        try:
+                            block_idx, K, session_id = struct.unpack('>IHI', raw_bytes[:10])
+                            if K > 0 and block_idx < K:
+                                is_custom = True
+                        except struct.error:
+                            pass
+                    
+                    if is_custom:
                         self.root.after(0, self.process_packet, raw_bytes)
+                    else:
+                        qr_text = obj.text
+                        if qr_text:
+                            self.root.after(0, self.process_general_qr, qr_text)
                 
                     # 绘制绿色边框反馈
                     pos = obj.position
@@ -221,6 +246,20 @@ class QRReceiverApp:
                     self.root.after(0, lambda img=tk_img: self.update_video_label(img))
                 
                 time.sleep(0.002)
+
+    def copy_general_qr(self):
+        if hasattr(self, 'last_general_qr_text') and self.last_general_qr_text:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self.last_general_qr_text)
+            self.log("📋 已复制通用二维码内容到剪贴板。")
+        else:
+            messagebox.showinfo("提示", "当前没有识别到任何通用二维码")
+
+    def process_general_qr(self, qr_text):
+        if qr_text != self.last_general_qr_text:
+            self.last_general_qr_text = qr_text
+            self.lbl_general_qr.config(text=f"通用二维码: {qr_text}")
+            self.log(f"📝 扫码通用二维码文本: {qr_text}")
 
     def update_video_label(self, img):
         if self.is_receiving:
