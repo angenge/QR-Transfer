@@ -59,6 +59,20 @@ class QRBroadcastApp:
         self.key_var = tk.StringVar(value="123456")
         ttk.Entry(param_frame, textvariable=self.key_var, width=10, show="*").pack(side=tk.LEFT, padx=5)
 
+        # 广播模式及轮数配置区域
+        mode_frame = tk.Frame(config_frame)
+        mode_frame.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=5)
+
+        ttk.Label(mode_frame, text="广播模式:").pack(side=tk.LEFT)
+        self.infinite_broadcast_var = tk.BooleanVar(value=False)
+        self.infinite_cb = ttk.Checkbutton(mode_frame, text="无限广播", variable=self.infinite_broadcast_var, command=self.toggle_rounds_entry)
+        self.infinite_cb.pack(side=tk.LEFT, padx=(5, 20))
+
+        ttk.Label(mode_frame, text="广播轮数:").pack(side=tk.LEFT)
+        self.rounds_var = tk.StringVar(value="5")
+        self.rounds_entry = ttk.Entry(mode_frame, textvariable=self.rounds_var, width=6)
+        self.rounds_entry.pack(side=tk.LEFT, padx=5)
+
 
 
         # --- 预览信息区域 ---
@@ -81,7 +95,7 @@ class QRBroadcastApp:
         control_frame = tk.Frame(self.root)
         control_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        self.start_btn = ttk.Button(control_frame, text="▶ 开始广播 (无尽模式)", command=self.start_broadcast, state=tk.DISABLED)
+        self.start_btn = ttk.Button(control_frame, text="▶ 开始广播", command=self.start_broadcast, state=tk.DISABLED)
         self.start_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
 
         self.stop_btn = ttk.Button(control_frame, text="⏹ 停止广播", command=self.stop_broadcast, state=tk.DISABLED)
@@ -95,6 +109,14 @@ class QRBroadcastApp:
         self.canvas = tk.Canvas(self.root, width=380, height=380, bg="#E0E0E0")
         self.canvas.pack(pady=5)
         self.qr_image_id = self.canvas.create_image(190, 190, anchor=tk.CENTER)
+
+        self.toggle_rounds_entry()
+
+    def toggle_rounds_entry(self):
+        if self.infinite_broadcast_var.get():
+            self.rounds_entry.config(state=tk.DISABLED)
+        else:
+            self.rounds_entry.config(state=tk.NORMAL)
 
     def select_file(self):
         filepath = filedialog.askopenfilename(title="选择要传输的文件")
@@ -173,6 +195,12 @@ class QRBroadcastApp:
         if not hasattr(self, 'previewed_chunks') or not self.previewed_chunks:
             return
 
+        if not self.infinite_broadcast_var.get():
+            rounds_str = self.rounds_var.get()
+            if not rounds_str.isdigit() or int(rounds_str) <= 0:
+                messagebox.showerror("错误", "请输入有效的广播轮数（正整数）")
+                return
+
         # 会话ID (Session ID) 既用于标识任务，也作为混淆种子的盐(Salt)
         self.session_id = int(time.time())
         self.is_broadcasting = True
@@ -180,6 +208,8 @@ class QRBroadcastApp:
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
         self.file_entry.config(state=tk.DISABLED)
+        self.infinite_cb.config(state=tk.DISABLED)
+        self.rounds_entry.config(state=tk.DISABLED)
         
         self.broadcast_thread = threading.Thread(target=self._broadcast_loop, daemon=True)
         self.broadcast_thread.start()
@@ -189,11 +219,24 @@ class QRBroadcastApp:
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
         self.file_entry.config(state=tk.NORMAL)
+        self.infinite_cb.config(state=tk.NORMAL)
+        self.toggle_rounds_entry()
         self.status_var.set("⏹ 广播已手动停止")
         
         # 清空画布
         self.canvas.delete(self.qr_image_id)
         self.qr_image_id = self.canvas.create_image(190, 190, anchor=tk.CENTER)
+
+    def _broadcast_completed_ui(self):
+        self.is_broadcasting = False
+        self.start_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.DISABLED)
+        self.file_entry.config(state=tk.NORMAL)
+        self.infinite_cb.config(state=tk.NORMAL)
+        self.toggle_rounds_entry()
+        
+        rounds_str = self.rounds_var.get()
+        self.status_var.set(f"🎉 广播已完成 (已发送 {rounds_str} 轮)")
 
     def _broadcast_loop(self):
         qr = qrcode.QRCode(
@@ -243,7 +286,18 @@ class QRBroadcastApp:
             
         # 2. 高速无开销轮播广播
         frame_counter = 0
+        rounds_limit = None
+        if not self.infinite_broadcast_var.get():
+            try:
+                rounds_limit = int(self.rounds_var.get())
+            except ValueError:
+                rounds_limit = 1
+
         while self.is_broadcasting:
+            if rounds_limit is not None and frame_counter >= rounds_limit * K:
+                self.root.after(0, self._broadcast_completed_ui)
+                break
+
             block_idx = frame_counter % K
             pil_img = pregenerated_images[block_idx]
             
