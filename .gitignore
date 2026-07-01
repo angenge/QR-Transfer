@@ -8,4 +8,6 @@ venv/
 ENV/
 env/
 dist/
+build/
+*.spec
 upx.exe

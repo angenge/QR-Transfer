@@ -1,0 +1,10 @@
+# QR Code GUI File Transfer Tool - Runtime Dependencies
+qrcode
+Pillow
+opencv-python
+numpy
+mss
+zxing-cpp
+
+# Build-time dependency (only needed for packaging with PyInstaller)
+# pyinstaller
