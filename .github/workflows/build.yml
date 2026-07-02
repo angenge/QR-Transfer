@@ -1,0 +1,45 @@
+name: Build Windows Exe
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build QR_Sender
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name "QR_Sender" --clean qr_sender_gui.py
+
+      - name: Build QR_Receiver
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name "QR_Receiver" --clean qr_receiver.py
+
+      - name: Upload QR_Sender
+        uses: actions/upload-artifact@v4
+        with:
+          name: QR_Sender
+          path: dist/QR_Sender.exe
+
+      - name: Upload QR_Receiver
+        uses: actions/upload-artifact@v4
+        with:
+          name: QR_Receiver
+          path: dist/QR_Receiver.exe
