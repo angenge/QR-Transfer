@@ -152,8 +152,9 @@ class QRReceiverApp:
                 img = np.array(sct.grab(monitor))
                 gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
                 
-                # 使用 zxing-cpp 扫描全屏
-                barcodes = zxingcpp.read_barcodes(gray)
+                # 使用 zxing-cpp 扫描全屏 (先进行定位图案还原)
+                gray_restored = self.restore_finder_patterns(gray)
+                barcodes = zxingcpp.read_barcodes(gray_restored)
                 qr_codes = [b for b in barcodes if b.format == zxingcpp.BarcodeFormat.QRCode]
                 
                 if qr_codes:
@@ -199,8 +200,9 @@ class QRReceiverApp:
                 frame = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 
-                # 调用 zxing-cpp 进行极速解码
-                barcodes = zxingcpp.read_barcodes(gray)
+                # 调用 zxing-cpp 进行极速解码 (先进行定位图案还原)
+                gray_restored = self.restore_finder_patterns(gray)
+                barcodes = zxingcpp.read_barcodes(gray_restored)
                 
                 for obj in barcodes:
                     # 过滤非二维码干扰
@@ -369,6 +371,42 @@ class QRReceiverApp:
             self.log(f"❌ 最终解压失败: {e}")
             messagebox.showerror("恢复失败", f"数据流重组或解压错误: {e}")
             self.btn_toggle.config(text="▶ 开始")
+
+    def restore_finder_patterns(self, gray_img):
+        """还原定位器图案的中心 3x3 黑色块，使 zxing-cpp 能够正确识别与解码。"""
+        img = gray_img.copy()
+        # 二值化：转换为黑白以利于 findContours，黑点变白（255），白底变黑（0）
+        _, thresh = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY_INV)
+        contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        if hierarchy is None or len(hierarchy) == 0:
+            return img
+            
+        hierarchy = hierarchy[0]
+        for i in range(len(contours)):
+            child_idx = hierarchy[i][2]
+            
+            # 寻找拥有唯一子轮廓且该子轮廓无再嵌套轮廓的图形（代表我们的空心定位角点）
+            if child_idx != -1 and hierarchy[child_idx][2] == -1:
+                x, y, w, h = cv2.boundingRect(contours[i])
+                aspect_ratio = float(w) / h if h > 0 else 0
+                if 0.8 <= aspect_ratio <= 1.25 and 10 <= w <= 250:
+                    area_p = cv2.contourArea(contours[i])
+                    area_c = cv2.contourArea(contours[child_idx])
+                    if area_p > 0:
+                        ratio = area_c / area_p
+                        if 0.3 <= ratio <= 0.75:
+                            cx = x + w // 2
+                            cy = y + h // 2
+                            m = w / 7.0
+                            size = int(3.0 * m)
+                            if size < 1:
+                                size = 1
+                            x1 = max(0, cx - size // 2)
+                            y1 = max(0, cy - size // 2)
+                            x2 = min(img.shape[1], x1 + size)
+                            y2 = min(img.shape[0], y1 + size)
+                            cv2.rectangle(img, (x1, y1), (x2, y2), 0, -1)
+        return img
 
 if __name__ == "__main__":
     root = tk.Tk()

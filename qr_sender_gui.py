@@ -280,6 +280,22 @@ class QRBroadcastApp:
             qr.clear()
             qr.add_data(final_data)
             qr.make(fit=True)
+
+            # 修改定位器图案为“空心”，避开通用二维码工具检测，但便于我们程序检测还原
+            width = len(qr.modules)
+            # 左上角定位图案中心 3x3
+            for r in range(2, 5):
+                for c in range(2, 5):
+                    qr.modules[r][c] = False
+            # 右上角定位图案中心 3x3
+            for r in range(2, 5):
+                for c in range(width - 5, width - 2):
+                    qr.modules[r][c] = False
+            # 左下角定位图案中心 3x3
+            for r in range(width - 5, width - 2):
+                for c in range(2, 5):
+                    qr.modules[r][c] = False
+
             pil_img = qr.make_image(fill_color="black", back_color="white")
             pil_img = pil_img.resize((360, 360), Image.Resampling.NEAREST)
             pregenerated_images.append(pil_img)
