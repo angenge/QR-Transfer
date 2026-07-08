@@ -3,6 +3,7 @@ name: Build Windows Exe
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -44,3 +45,13 @@ jobs:
         with:
           name: QR_Receiver
           path: dist/QR_Receiver.exe
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/QR_Sender.exe
+            dist/QR_Receiver.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
