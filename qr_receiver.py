@@ -19,7 +19,7 @@ import hashlib
 class QRReceiverApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("二维码接收器")
+        self.root.title("屏传码接收器")
         self.root.geometry("820x600")
         self.root.resizable(False, False)
         
@@ -50,9 +50,9 @@ class QRReceiverApp:
         self.lbl_target = ttk.Label(ctrl_frame, text="捕获区域: 等待校准...", foreground="gray")
         self.lbl_target.pack(side=tk.LEFT, padx=20)
 
-        ttk.Label(ctrl_frame, text="密钥:").pack(side=tk.LEFT, padx=(20, 5))
-        self.key_var = tk.StringVar(value="123456")
-        ttk.Entry(ctrl_frame, textvariable=self.key_var, width=10, show="*").pack(side=tk.LEFT, padx=5)
+        # ttk.Label(ctrl_frame, text="密钥:").pack(side=tk.LEFT, padx=(20, 5))
+        self.key_var = tk.StringVar(value="FOW8ojfjLm")
+        # ttk.Entry(ctrl_frame, textvariable=self.key_var, width=10, show="*").pack(side=tk.LEFT, padx=5)
 
         
         main_frame = ttk.Frame(self.root, padding=10)

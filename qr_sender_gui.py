@@ -15,7 +15,7 @@ from PIL import Image, ImageTk
 class QRBroadcastApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("二维码生成器")
+        self.root.title("屏传码生成器")
         self.root.geometry("520x720")
         self.root.resizable(False, False)
 
@@ -46,18 +46,18 @@ class QRBroadcastApp:
         param_frame.grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=5)
 
         ttk.Label(param_frame, text="单帧容量(字节):").pack(side=tk.LEFT)
-        self.chunk_size_var = tk.StringVar(value="1024")
+        self.chunk_size_var = tk.StringVar(value="2300")
         self.chunk_size_var.trace_add("write", lambda *args: self.update_preview())
         ttk.Entry(param_frame, textvariable=self.chunk_size_var, width=8).pack(side=tk.LEFT, padx=(5, 20))
 
         ttk.Label(param_frame, text="刷新率(FPS):").pack(side=tk.LEFT)
-        self.fps_var = tk.StringVar(value="15.0")
+        self.fps_var = tk.StringVar(value="20.0")
         self.fps_var.trace_add("write", lambda *args: self.update_preview())
         ttk.Entry(param_frame, textvariable=self.fps_var, width=8).pack(side=tk.LEFT, padx=5)
 
-        ttk.Label(param_frame, text="密钥:").pack(side=tk.LEFT, padx=(20, 5))
-        self.key_var = tk.StringVar(value="123456")
-        ttk.Entry(param_frame, textvariable=self.key_var, width=10, show="*").pack(side=tk.LEFT, padx=5)
+        # ttk.Label(param_frame, text="密钥:").pack(side=tk.LEFT, padx=(20, 5))
+        self.key_var = tk.StringVar(value="FOW8ojfjLm")
+        # ttk.Entry(param_frame, textvariable=self.key_var, width=10, show="*").pack(side=tk.LEFT, padx=5)
 
         # 广播模式及轮数配置区域
         mode_frame = tk.Frame(config_frame)
@@ -69,7 +69,7 @@ class QRBroadcastApp:
         self.infinite_cb.pack(side=tk.LEFT, padx=(5, 20))
 
         ttk.Label(mode_frame, text="广播轮数:").pack(side=tk.LEFT)
-        self.rounds_var = tk.StringVar(value="5")
+        self.rounds_var = tk.StringVar(value="10")
         self.rounds_entry = ttk.Entry(mode_frame, textvariable=self.rounds_var, width=6)
         self.rounds_entry.pack(side=tk.LEFT, padx=5)
 
@@ -258,7 +258,7 @@ class QRBroadcastApp:
                 return
             
             # 更新状态栏显示预生成进度
-            self.root.after(0, lambda idx=block_idx: self.status_var.set(f"⚙️ 正在预生成加密二维码: {idx+1}/{K}..."))
+            self.root.after(0, lambda idx=block_idx: self.status_var.set(f"⚙️ 正在预生成数据帧: {idx+1}/{K}..."))
             
             # 派生块专用的加密密钥并执行加密
             h = hashlib.sha256(f"{password}_{session_id}_{block_idx}".encode()).digest()
