@@ -45,7 +45,7 @@ echo [4/4] Building QR_Receiver.exe...
 pyinstaller --noconfirm --onefile --windowed ^
     --name "QR_Receiver" ^
     --clean ^
-    "%SCRIPT_DIR%qr_receiver.py"
+    "%SCRIPT_DIR%qr_receiver_gui.py"
 if errorlevel 1 (
     echo ERROR: Failed to build QR_Receiver
     exit /b 1

@@ -6,7 +6,7 @@
 
 ## 🛠️ 技术架构与核心逻辑梳理
 
-本系统由两个核心部分组成：发送端 ([qr_sender_gui.py](file:///c:/Users/HIZONE/Desktop/qr_gui_tool/qr_sender_gui.py)) 和接收端 ([qr_receiver.py](file:///c:/Users/HIZONE/Desktop/qr_gui_tool/qr_receiver.py))。
+本系统由两个核心部分组成：发送端 ([qr_sender_gui.py](file:///c:/Users/HIZONE/Desktop/qr_gui_tool/qr_sender_gui.py)) 和接收端 ([qr_receiver_gui.py](file:///c:/Users/HIZONE/Desktop/qr_gui_tool/qr_receiver_gui.py))。
 
 ### 1. 发送端 (`qr_sender_gui.py`) 逻辑梳理
 
@@ -43,7 +43,7 @@ graph TD
 
 ---
 
-### 2. 接收端 (`qr_receiver.py`) 逻辑梳理
+### 2. 接收端 (`qr_receiver_gui.py`) 逻辑梳理
 
 接收端的核心职责是：**捕获屏幕 ➔ 快速定位二维码 ➔ 解码二进制流 ➔ 协议解析 ➔ 解密负载 ➔ 收集重组 ➔ LZMA解压 ➔ 保存文件**。
 
@@ -112,7 +112,7 @@ pip install qrcode pillow opencv-python numpy mss zxing-cpp
   ```
 * 运行接收端：
   ```bash
-  python qr_receiver.py
+  python qr_receiver_gui.py
   ```
 
 ### 第二步：配置发送端并预备

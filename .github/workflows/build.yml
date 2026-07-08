@@ -32,7 +32,7 @@ jobs:
 
       - name: Build QR_Receiver
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "QR_Receiver" --clean qr_receiver.py
+          pyinstaller --noconfirm --onefile --windowed --name "QR_Receiver" --clean qr_receiver_gui.py
 
       - name: Upload QR_Sender
         uses: actions/upload-artifact@v4
