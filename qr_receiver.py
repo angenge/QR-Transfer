@@ -145,42 +145,9 @@ class QRReceiverApp:
             self.video_label.image = None
 
             self.log("🔍 正在全屏扫描二维码，请确保发射端窗口露出...")
-            self.root.update()
+            self.lbl_target.config(text="捕获区域: 动态全屏扫描中...", foreground="orange")
             
-            with mss.MSS() as sct:
-                monitor = sct.monitors[0]
-                img = np.array(sct.grab(monitor))
-                gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
-                
-                # 使用 zxing-cpp 扫描全屏 (先进行定位图案还原)
-                gray_restored = self.restore_finder_patterns(gray)
-                barcodes = zxingcpp.read_barcodes(gray_restored)
-                qr_codes = [b for b in barcodes if b.format == zxingcpp.BarcodeFormat.QRCode]
-                
-                if qr_codes:
-                    # 提取二维码的四个角的坐标
-                    pos = qr_codes[0].position
-                    x_coords = [pos.top_left.x, pos.top_right.x, pos.bottom_right.x, pos.bottom_left.x]
-                    y_coords = [pos.top_left.y, pos.top_right.y, pos.bottom_right.y, pos.bottom_left.y]
-                    
-                    x, y = min(x_coords), min(y_coords)
-                    w, h = max(x_coords) - x, max(y_coords) - y
-                    
-                    padding = 40
-                    self.monitor_area = {
-                        "top": max(0, y - padding),
-                        "left": max(0, x - padding),
-                        "width": w + padding * 2,
-                        "height": h + padding * 2
-                    }
-                    self.log(f"✅ 锁定成功！坐标: X:{self.monitor_area['left']} Y:{self.monitor_area['top']}")
-                    self.lbl_target.config(text=f"捕获区域: {self.monitor_area['width']}x{self.monitor_area['height']} (锁定)", foreground="green")
-                else:
-                    self.log("⚠️ 未在屏幕找到二维码！将捕获主屏幕中央...")
-                    sw, sh = sct.monitors[1]["width"], sct.monitors[1]["height"]
-                    self.monitor_area = {"top": sh//2 - 200, "left": sw//2 - 200, "width": 400, "height": 400}
-                    self.lbl_target.config(text="捕获区域: 默认居中 400x400", foreground="orange")
-
+            self.monitor_area = None
             self.is_receiving = True
             self.btn_toggle.config(text="⏹ 停止")
             
@@ -194,9 +161,32 @@ class QRReceiverApp:
 
     def _screen_loop(self):
         last_ui_update = 0
+        consecutive_misses = 0
+        MAX_MISSES = 15  # 连续 15 帧没扫到二维码则认为丢失锁定，触发重新全屏扫描（约 0.5 - 1.0 秒）
+        
         with mss.MSS() as sct:
+            # 获取虚拟屏幕的尺寸和边界 (包含所有显示器)
+            virtual_screen = sct.monitors[0]
+            vs_left = virtual_screen["left"]
+            vs_top = virtual_screen["top"]
+            vs_width = virtual_screen["width"]
+            vs_height = virtual_screen["height"]
+            vs_right = vs_left + vs_width
+            vs_bottom = vs_top + vs_height
+
             while self.is_receiving:
-                img = np.array(sct.grab(self.monitor_area))
+                is_locked = (self.monitor_area is not None)
+                grab_area = self.monitor_area if is_locked else virtual_screen
+                
+                try:
+                    img = np.array(sct.grab(grab_area))
+                except Exception as e:
+                    # 抓图异常（如显示配置变化、无效区域等）时，重置为全屏搜索
+                    self.monitor_area = None
+                    consecutive_misses = 0
+                    time.sleep(0.1)
+                    continue
+
                 frame = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 
@@ -204,39 +194,90 @@ class QRReceiverApp:
                 gray_restored = self.restore_finder_patterns(gray)
                 barcodes = zxingcpp.read_barcodes(gray_restored)
                 
-                for obj in barcodes:
-                    # 过滤非二维码干扰
-                    if obj.format != zxingcpp.BarcodeFormat.QRCode:
-                        continue
-                        
-                    # 判断是自定义协议特定二维码还是通用二维码
-                    raw_bytes = obj.bytes
-                    is_custom = False
-                    if len(raw_bytes) >= 10:
-                        try:
-                            block_idx, K, session_id = struct.unpack('>IHI', raw_bytes[:10])
-                            if K > 0 and block_idx < K:
-                                is_custom = True
-                        except struct.error:
-                            pass
-                    
-                    if is_custom:
-                        self.root.after(0, self.process_packet, raw_bytes)
-                    else:
-                        qr_text = obj.text
-                        if qr_text:
-                            self.root.after(0, self.process_general_qr, qr_text)
+                # 过滤出二维码类型的条码
+                qr_codes = [b for b in barcodes if b.format == zxingcpp.BarcodeFormat.QRCode]
                 
-                    # 绘制绿色边框反馈
-                    pos = obj.position
-                    pts_array = np.array([
-                        [pos.top_left.x, pos.top_left.y],
-                        [pos.top_right.x, pos.top_right.y],
-                        [pos.bottom_right.x, pos.bottom_right.y],
-                        [pos.bottom_left.x, pos.bottom_left.y]
-                    ], np.int32).reshape((-1, 1, 2))
-                    cv2.polylines(frame, [pts_array], True, (0, 255, 0), 2)
-
+                if qr_codes:
+                    consecutive_misses = 0
+                    
+                    # 动态锁定或追踪最新的二维码位置
+                    target_qr = qr_codes[0]
+                    pos = target_qr.position
+                    x_coords = [pos.top_left.x, pos.top_right.x, pos.bottom_right.x, pos.bottom_left.x]
+                    y_coords = [pos.top_left.y, pos.top_right.y, pos.bottom_right.y, pos.bottom_left.y]
+                    
+                    x, y = min(x_coords), min(y_coords)
+                    w, h = max(x_coords) - x, max(y_coords) - y
+                    
+                    # 将相对于当前抓取区域的坐标转换为屏幕绝对坐标
+                    screen_x = grab_area["left"] + x
+                    screen_y = grab_area["top"] + y
+                    
+                    # 设定外扩 padding 像素，并裁剪限制在虚拟屏幕范围内，防止 mss 抓图越界报错
+                    padding = 40
+                    left = max(vs_left, screen_x - padding)
+                    top = max(vs_top, screen_y - padding)
+                    right = min(vs_right, screen_x + w + padding)
+                    bottom = min(vs_bottom, screen_y + h + padding)
+                    
+                    new_area = {
+                        "left": int(left),
+                        "top": int(top),
+                        "width": int(right - left),
+                        "height": int(bottom - top)
+                    }
+                    
+                    # 如果刚才没锁定，此时宣告锁定成功；如果已经锁定，则无缝更新追踪区域
+                    if not is_locked:
+                        self.monitor_area = new_area
+                        self.root.after(0, lambda a=new_area: self.log(f"✅ 锁定成功！坐标: X:{a['left']} Y:{a['top']} ({a['width']}x{a['height']})"))
+                        self.root.after(0, lambda a=new_area: self.lbl_target.config(
+                            text=f"捕获区域: {a['width']}x{a['height']} (锁定)", foreground="green"
+                        ))
+                    else:
+                        self.monitor_area = new_area
+                    
+                    # 对这一帧中所有二维码进行解码处理
+                    for obj in qr_codes:
+                        # 判断是自定义协议特定二维码还是通用二维码
+                        raw_bytes = obj.bytes
+                        is_custom = False
+                        if len(raw_bytes) >= 10:
+                            try:
+                                block_idx, K, session_id = struct.unpack('>IHI', raw_bytes[:10])
+                                if K > 0 and block_idx < K:
+                                    is_custom = True
+                            except struct.error:
+                                pass
+                        
+                        if is_custom:
+                            self.root.after(0, self.process_packet, raw_bytes)
+                        else:
+                            qr_text = obj.text
+                            if qr_text:
+                                self.root.after(0, self.process_general_qr, qr_text)
+                    
+                        # 绘制绿色边框反馈
+                        pos = obj.position
+                        pts_array = np.array([
+                            [pos.top_left.x, pos.top_left.y],
+                            [pos.top_right.x, pos.top_right.y],
+                            [pos.bottom_right.x, pos.bottom_right.y],
+                            [pos.bottom_left.x, pos.bottom_left.y]
+                        ], np.int32).reshape((-1, 1, 2))
+                        cv2.polylines(frame, [pts_array], True, (0, 255, 0), 2)
+                else:
+                    # 本帧未检测到任何二维码
+                    if is_locked:
+                        consecutive_misses += 1
+                        if consecutive_misses >= MAX_MISSES:
+                            self.monitor_area = None
+                            consecutive_misses = 0
+                            self.root.after(0, lambda: self.log("⚠️ 失去二维码锁定，重新进行全屏扫描..."))
+                            self.root.after(0, lambda: self.lbl_target.config(
+                                text="捕获区域: 动态全屏扫描中...", foreground="orange"
+                            ))
+                
                 # 限制 UI 预览渲染刷新率为约 15 FPS，以节省主线程开销并大幅提升后台抓图解码吞吐量
                 now = time.time()
                 if now - last_ui_update > 0.066:
@@ -247,7 +288,11 @@ class QRReceiverApp:
                     tk_img = ImageTk.PhotoImage(image=pil_img)
                     self.root.after(0, lambda img=tk_img: self.update_video_label(img))
                 
-                time.sleep(0.002)
+                # 动态控制休眠时间：未锁定时降低全屏扫描频率，减轻 CPU 负荷
+                if not is_locked:
+                    time.sleep(0.1)
+                else:
+                    time.sleep(0.002)
 
     def copy_general_qr(self):
         if hasattr(self, 'last_general_qr_text') and self.last_general_qr_text:
