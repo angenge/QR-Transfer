@@ -51,7 +51,7 @@ class QRBroadcastApp:
         ttk.Entry(param_frame, textvariable=self.chunk_size_var, width=8).pack(side=tk.LEFT, padx=(5, 20))
 
         ttk.Label(param_frame, text="刷新率(FPS):").pack(side=tk.LEFT)
-        self.fps_var = tk.StringVar(value="20.0")
+        self.fps_var = tk.StringVar(value="12.0")
         self.fps_var.trace_add("write", lambda *args: self.update_preview())
         ttk.Entry(param_frame, textvariable=self.fps_var, width=8).pack(side=tk.LEFT, padx=5)
 
